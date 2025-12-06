@@ -10,7 +10,6 @@ const util = require('util');
 
 const app = express();
 
-// 核心设置：信任前端代理 (Nginx/Cloudflare等)
 app.set('trust proxy', true);
 
 const DEFAULT_USERNAME = process.env.APP_USERNAME || 'admin';
@@ -127,9 +126,6 @@ app.use(async (req, res, next) => {
 
         console.log(`${timeStr} 收到订阅请求 -> 来源: ${clientIP}`);
         
-        // --- 调试模式：取消注释下面这行可以看到所有 Header，帮助你排查是不是 Nginx 没传 IP ---
-        // console.log('Debug Headers:', JSON.stringify(req.headers)); 
-
         try {
             if (req.query.CFIP && req.query.CFPORT) {
                 CFIP = req.query.CFIP;
@@ -368,6 +364,14 @@ app.post('/admin/delete-node', async (req, res) => {
     } else {
         res.json({ error: '未找到目标数据' });
     }
+});
+
+app.post('/admin/save-nodes', async (req, res) => {
+    const input = req.body.nodes;
+    if (typeof input !== 'string') return res.status(400).json({ error: 'Invalid data' });
+    nodes = input;
+    await saveData(subscriptions, nodes);
+    res.json({ message: 'Order saved' });
 });
 
 app.get('/admin/data', (req, res) => {
