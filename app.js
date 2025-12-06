@@ -102,7 +102,10 @@ app.use((req, res, next) => cookieParser(getCookieSecret())(req, res, next));
 
 app.use(async (req, res, next) => {
     if (SUB_TOKEN && req.path === `/${SUB_TOKEN}`) {
-        const now = new Date();
+        
+        const dateObj = new Date();
+        const utc = dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000);
+        const now = new Date(utc + (3600000 * 8)); 
         const timeStr = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
         
         let clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
@@ -130,7 +133,7 @@ app.use(async (req, res, next) => {
             if (credentials.bark_url) {
                 if (Date.now() - lastBarkTime > 3000) {
                     lastBarkTime = Date.now();
-                    const title = encodeURIComponent('Merge-Sub: 订阅被访问');
+                    const title = encodeURIComponent('Merge-Sub: 收到订阅请求');
                     const body = encodeURIComponent(`来源 IP: ${clientIP}\n数据大小: ${base64Data.length} bytes\n时间: ${timeStr}`);
                     
                     let barkBase = credentials.bark_url.endsWith('/') ? credentials.bark_url : credentials.bark_url + '/';
