@@ -257,11 +257,25 @@ async function addItem() {
 async function copyToClipboard(element, text) { 
     try { 
         await navigator.clipboard.writeText(text);
+        
+        const copyTip = document.getElementById('copyTip');
+        if (copyTip) {
+            // 修改点：改回 block
+            copyTip.style.display = 'block';
+            setTimeout(() => {
+                copyTip.style.display = 'none';
+            }, 1000);
+        }
+
+        const originalBg = element.style.backgroundColor;
+        const originalColor = element.style.color;
+        
         element.style.backgroundColor = '#00ff00';
         element.style.color = '#000000';
+        
         setTimeout(() => { 
-            element.style.backgroundColor = 'transparent';
-            element.style.color = 'var(--terminal-green)';
+            element.style.backgroundColor = originalBg || 'transparent';
+            element.style.color = originalColor || 'var(--terminal-green)';
         }, 500); 
     } catch (err) { console.error(err); } 
 } 
