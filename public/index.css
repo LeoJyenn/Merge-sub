@@ -1,0 +1,355 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+:root {
+    --bg-color: #000000;
+    --terminal-green: #00ff00;
+    --terminal-dim: #008f00;
+    --alert-color: #ff0000;
+    --highlight-color: #ffff00;
+    --border-style: 1px solid var(--terminal-green);
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden; 
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--terminal-green);
+    font-family: Consolas, Monaco, 'Courier New', 'Microsoft YaHei', monospace;
+    padding: 10px;
+    box-sizing: border-box;
+    font-size: 14px;
+    letter-spacing: 0;
+}
+
+.matrix-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.2;
+}
+
+::selection {
+    background: var(--terminal-green);
+    color: var(--bg-color);
+}
+
+.container {
+    max-width: 1400px;
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: var(--border-style);
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    overflow-x: auto;
+    gap: 20px;
+    flex-shrink: 0;
+}
+
+.top-nav::-webkit-scrollbar { height: 4px; }
+.top-nav::-webkit-scrollbar-thumb { background: var(--terminal-dim); }
+
+.system-status {
+    font-weight: bold;
+    text-shadow: 0 0 5px var(--terminal-green);
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.nav-links {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.nav-btn {
+    background: transparent;
+    color: var(--terminal-green);
+    border: 1px solid transparent;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    transition: all 0.2s;
+    padding: 6px 10px;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.nav-btn:hover {
+    background-color: rgba(0, 255, 0, 0.1);
+    border-color: var(--terminal-green);
+    box-shadow: 0 0 8px var(--terminal-green);
+    text-shadow: 0 0 5px var(--terminal-green);
+}
+
+.danger-btn { color: #ff3333; }
+.danger-btn:hover {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-color: #ff3333;
+    box-shadow: 0 0 8px #ff3333;
+    color: #ff3333;
+}
+
+h1 {
+    font-family: 'VT323', monospace;
+    text-align: center;
+    font-size: 2.5em;
+    margin: 5px 0 15px 0;
+    text-transform: uppercase;
+    text-shadow: 2px 2px var(--terminal-dim);
+    letter-spacing: 2px;
+    flex-shrink: 0;
+}
+
+.row {
+    display: flex;
+    gap: 15px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+    margin-bottom: 10px;
+}
+
+.column {
+    flex: 1;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* --- 核心修改开始 --- */
+/* 左侧列布局调整 */
+.column:first-child .terminal-box {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* 上方（添加）方框：分配 55% 的空间 */
+.column:first-child .terminal-box:first-child {
+    flex: 1.2; /* 比下方稍微大一点 */
+}
+
+/* 下方（删除）方框：分配 45% 的空间 */
+.column:first-child .terminal-box:last-child {
+    flex: 1; 
+    margin-bottom: 0;
+}
+/* --- 核心修改结束 --- */
+
+.terminal-box {
+    border: var(--border-style);
+    background: rgba(0, 20, 0, 0.4);
+    padding: 12px;
+    margin-bottom: 15px;
+    position: relative;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.05);
+    flex-shrink: 0;
+}
+
+.terminal-header {
+    background-color: var(--terminal-green);
+    color: var(--bg-color);
+    padding: 2px 8px;
+    display: inline-block;
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+textarea, input[type="text"], input[type="password"], #data {
+    font-family: Consolas, Monaco, 'Courier New', 'Microsoft YaHei', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+textarea, input[type="text"], input[type="password"] {
+    width: 100%;
+    background: transparent;
+    border: var(--border-style);
+    color: var(--terminal-green);
+    padding: 8px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    resize: none;
+}
+
+textarea:focus, input:focus {
+    outline: none;
+    box-shadow: 0 0 8px var(--terminal-dim);
+    background: rgba(0, 30, 0, 0.6);
+}
+
+textarea {
+    flex: 1;
+    min-height: 0; 
+    height: auto;
+}
+
+.remark-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.remark-group .prompt { white-space: nowrap; }
+
+.cmd-btn {
+    width: 100%;
+    background: transparent;
+    border: var(--border-style);
+    color: var(--terminal-green);
+    padding: 8px;
+    font-family: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    font-family: 'VT323', monospace;
+    flex-shrink: 0;
+}
+
+.cmd-btn:hover { background: var(--terminal-green); color: var(--bg-color); }
+
+.delete-btn { border-color: var(--alert-color); color: var(--alert-color); }
+.delete-btn:hover { background: var(--alert-color); color: var(--bg-color); }
+
+.display-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    height: 100%;
+    margin-bottom: 0;
+    overflow: hidden;
+}
+
+#data {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding: 10px;
+    border: 1px dashed var(--terminal-dim);
+    margin-bottom: 0;
+}
+
+.footer {
+    text-align: center;
+    margin-top: 0;
+    padding-top: 10px;
+    border-top: var(--border-style);
+    opacity: 0.6;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.alert-box {
+    background: #000;
+    border: 1px solid var(--terminal-green);
+    padding: 20px;
+    width: 450px;
+    max-width: 90%;
+    box-shadow: 0 0 30px var(--terminal-green);
+    color: var(--terminal-green);
+}
+
+.alert-button {
+    background: var(--terminal-green);
+    color: black;
+    border: none;
+    padding: 8px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 15px;
+    width: 100%;
+}
+.alert-button:hover { background: white; }
+
+.alert-danger-btn { background: #cc0000; color: white; }
+.alert-danger-btn:hover { background: #ff3333; }
+
+.subscription-line {
+    margin-bottom: 12px;
+    border-bottom: 1px dashed #003300;
+    padding-bottom: 8px;
+}
+
+.subscription-url {
+    background: #002200;
+    color: var(--terminal-green);
+    padding: 6px;
+    border: 1px dotted var(--terminal-green);
+    margin: 5px 0;
+    cursor: pointer;
+    font-size: 12px;
+    word-break: break-all;
+}
+.subscription-url:hover { background: #004400; }
+
+.node-remark {
+    color: var(--highlight-color);
+    font-weight: bold;
+    margin-right: 5px;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #001100; }
+::-webkit-scrollbar-thumb { background: var(--terminal-green); }
+
+@media screen and (max-width: 768px) {
+    html, body {
+        height: auto;
+        overflow: auto;
+    }
+    .container { height: auto; display: block; }
+    .row { flex-direction: column; display: block; }
+    .column { height: auto; display: block; }
+    #data { height: 350px; flex: none; }
+    .footer { margin-top: 20px; }
+    textarea { height: 120px; flex: none; }
+    .column:first-child .terminal-box { display: block; flex: none; }
+}

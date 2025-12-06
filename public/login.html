@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>系统访问控制</title>
+    <link rel="icon" href="/icon.png">
+    <link rel="apple-touch-icon" href="/icon.png">
+    <link href="/index.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .auth-box {
+            width: 400px;
+            max-width: 90%;
+            padding: 20px;
+            border: 1px solid var(--terminal-green);
+            background: rgba(0, 20, 0, 0.8);
+            box-shadow: 0 0 20px var(--terminal-green);
+        }
+        .form-group { margin-bottom: 20px; }
+        .label { display: block; margin-bottom: 5px; color: var(--terminal-green); font-weight: bold; }
+        .login-btn { width: 100%; margin-top: 10px; font-size: 16px; }
+        
+        input[type="text"], input[type="password"] {
+            font-size: 16px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg"></div>
+    
+    <div class="auth-box">
+        <h1 class="glitch" style="margin-top:0; font-size: 2em;">系统登录</h1>
+        <div class="terminal-header" style="width: 100%; box-sizing: border-box;">>> 身份验证</div>
+        
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label class="label">> 用户名:</label>
+                <input type="text" id="username" autocomplete="username" required>
+            </div>
+            <div class="form-group">
+                <label class="label">> 访问密钥:</label>
+                <input type="password" id="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="cmd-btn add-btn login-btn">[ 进入系统 ]</button>
+        </form>
+    </div>
+
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.querySelector('.login-btn');
+            const originalText = btn.textContent;
+            btn.textContent = "[ 验证中... ]";
+            btn.disabled = true;
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    btn.textContent = "[ 验证通过 ]";
+                    setTimeout(() => window.location.href = '/', 500);
+                } else {
+                    alert(result.error || '登录失败');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert('连接服务器失败');
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Merge-sub订阅合并系统</title>
+    <link rel="icon" href="/icon.png">
+    <link rel="apple-touch-icon" href="/icon.png">
+    <link href="/index.css" rel="stylesheet">
+    <script>
+        (function() {
+            if (window.location.href.indexOf('@') !== -1) {
+                var cleanUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+                window.location.replace(cleanUrl);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="matrix-bg"></div>
+    <div class="container">
+        <div class="top-nav">
+            <div class="system-status">
+                系统状态: 在线 
+                <span style="margin: 0 10px; opacity: 0.5;">|</span> 
+                <span id="bjTime" style="font-weight: normal; color: var(--terminal-green);"></span>
+            </div>
+            <div class="nav-links">
+                <button onclick="showSubscriptionInfo()" class="nav-btn">[ 获取链接 ]</button>
+                <button onclick="configureBark()" class="nav-btn">[ Bark设置 ]</button>
+                <button onclick="backupData()" class="nav-btn">[ 备份数据 ]</button>
+                <button onclick="restoreData()" class="nav-btn">[ 恢复数据 ]</button>
+                <button onclick="resetSubLink()" class="nav-btn danger-btn">[ 重置订阅 ]</button>
+                <a href="/change-password.html" class="nav-btn">[ 修改密码 ]</a>
+                <button id="logoutBtn" onclick="logout()" class="nav-btn">[ 退出登录 ]</button>
+                <a href="https://github.com/LeoJyenn" target="_blank" class="nav-btn">[ GITHUB ]</a>
+            </div>
+        </div>
+        
+        <h1 class="glitch" data-text="Merge-sub">Merge-sub</h1>
+
+        <div class="row">
+            <div class="column">
+                <div class="section terminal-box">
+                    <div class="terminal-header">>> 数据注入 (添加)</div>
+                    <textarea id="addInput" placeholder="输入订阅链接或节点数据..."></textarea>
+                    <div class="remark-group">
+                        <span class="prompt">> 节点备注:</span>
+                        <input type="text" id="remarkInput" placeholder="输入新备注 (将自动替换原有备注)">
+                    </div>
+                    <button class="cmd-btn add-btn" onclick="addItem()">> 执行添加</button>
+                </div>
+                <div class="section terminal-box">
+                    <div class="terminal-header">>> 数据清除 (删除)</div>
+                    <textarea id="deleteInput" placeholder="输入要删除的订阅或节点 (需与列表显示一致)..."></textarea>
+                    <button class="cmd-btn delete-btn" onclick="deleteItem()">> 执行删除</button>
+                </div>
+            </div>
+            <div class="column">
+                <div class="section terminal-box display-section">
+                    <div class="terminal-header">>> 节点数据流</div>
+                    <div id="data" class="console-output">正在初始化数据链路...</div>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            <span>管理员@LeoJyenn:~/订阅合并系统# _</span>
+        </div>
+        <input type="file" id="restoreInput" style="display:none" accept=".json">
+    </div>
+    <script type="text/javascript" src="script.js"></script>
+</body>
+</html>
