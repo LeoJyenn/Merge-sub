@@ -28,15 +28,17 @@
                 <span style="margin: 0 10px; opacity: 0.5;">|</span> 
                 <span id="bjTime" style="font-weight: normal; color: var(--terminal-green);"></span>
             </div>
-            <div class="nav-links">
+            <div class="nav-links" style="position: relative;">
+                <span id="copyTip" style="display:none; position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-top: -1px; width: max-content; margin-right: 15px; color: #00ff00; font-size: 14px; text-shadow: 0 0 5px #00ff00;">[ 复制成功 ]</span>
+                
                 <button onclick="showSubscriptionInfo()" class="nav-btn">[ 获取链接 ]</button>
                 <button onclick="configureBark()" class="nav-btn">[ Bark设置 ]</button>
                 <button onclick="backupData()" class="nav-btn">[ 备份数据 ]</button>
                 <button onclick="restoreData()" class="nav-btn">[ 恢复数据 ]</button>
-                <button onclick="resetSubLink()" class="nav-btn danger-btn">[ 重置订阅 ]</button>
+                <button onclick="resetSubLink()" class="nav-btn">[ 重置订阅 ]</button>
                 <a href="/change-password.html" class="nav-btn">[ 修改密码 ]</a>
                 <button id="logoutBtn" onclick="logout()" class="nav-btn">[ 退出登录 ]</button>
-                <a href="https://github.com/LeoJyenn" target="_blank" class="nav-btn">[ GITHUB ]</a>
+                <a href="https://github.com/LeoJyenn/Merge-sub" target="_blank" class="nav-btn">[ GITHUB ]</a>
             </div>
         </div>
         
@@ -46,16 +48,18 @@
             <div class="column">
                 <div class="section terminal-box">
                     <div class="terminal-header">>> 数据注入 (添加)</div>
-                    <textarea id="addInput" placeholder="输入订阅链接或节点数据..."></textarea>
-                    <div class="remark-group">
+                    <textarea id="addInput" placeholder="输入节点数据..."></textarea>
+                    
+                    <div class="remark-group" style="margin-top: 1px; margin-bottom: -1px;">
                         <span class="prompt">> 节点备注:</span>
-                        <input type="text" id="remarkInput" placeholder="输入新备注 (将自动替换原有备注)">
+                        <input type="text" id="remarkInput" placeholder="输入新备注 (支持自动编码)">
                     </div>
+                    
                     <button class="cmd-btn add-btn" onclick="addItem()">> 执行添加</button>
                 </div>
                 <div class="section terminal-box">
                     <div class="terminal-header">>> 数据清除 (删除)</div>
-                    <textarea id="deleteInput" placeholder="输入要删除的订阅或节点 (需与列表显示一致)..."></textarea>
+                    <textarea id="deleteInput" placeholder="输入要删除的节点数据..."></textarea>
                     <button class="cmd-btn delete-btn" onclick="deleteItem()">> 执行删除</button>
                 </div>
             </div>
