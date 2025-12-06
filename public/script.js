@@ -6,6 +6,7 @@ window.addEventListener('pageshow', (event) => {
 
 let subToken = ''; 
 let apiUrl = ''; 
+let sortableInstance = null;
 
 function updateBjTime() {
     const now = new Date();
@@ -260,7 +261,6 @@ async function copyToClipboard(element, text) {
         
         const copyTip = document.getElementById('copyTip');
         if (copyTip) {
-            // 修改点：改回 block
             copyTip.style.display = 'block';
             setTimeout(() => {
                 copyTip.style.display = 'none';
@@ -280,6 +280,19 @@ async function copyToClipboard(element, text) {
     } catch (err) { console.error(err); } 
 } 
 
+async function saveNodeOrder() {
+    const items = document.querySelectorAll('.node-item');
+    const nodes = Array.from(items).map(item => decodeURIComponent(item.getAttribute('data-raw'))).join('\n');
+    
+    try {
+        await fetch('/admin/save-nodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nodes })
+        });
+    } catch (e) { console.error(e); }
+}
+
 async function fetchData() {
     const dataContainer = document.getElementById('data');
     try {
@@ -288,7 +301,7 @@ async function fetchData() {
         if (!response.ok) throw new Error('获取数据失败');
         
         const data = await response.json();
-        let formattedText = '<div style="margin-top: 0;">';
+        let formattedText = '<div id="node-list" style="margin-top: 0;">';
         
         let nodesContent = '';
         if (typeof data.nodes === 'string') nodesContent = data.nodes;
@@ -304,7 +317,7 @@ async function fetchData() {
                 
                 let displayHtml = remark ? `<span class="node-remark">[${remark}]</span> ${formattedLink}` : formattedLink;
                 
-                return `<div style="cursor: pointer; padding: 4px 0; border-left: 2px solid transparent; border-bottom: 1px dotted #003300; hover:border-left: 2px solid #00ff00;" onclick="copyToClipboard(this, '${node.replace(/'/g, "\\'")}')"> > ${displayHtml}</div>`;
+                return `<div class="node-item" data-raw="${encodeURIComponent(node)}" onclick="copyToClipboard(this, decodeURIComponent('${encodeURIComponent(node)}'))"> > ${displayHtml}</div>`;
             }).join('');
         } else {
             formattedText += '<div style="color:#008f00; font-style:italic;">[ 暂无节点数据 ]</div>';
@@ -312,6 +325,24 @@ async function fetchData() {
         
         formattedText += '</div>';
         dataContainer.innerHTML = formattedText;
+
+        if (sortableInstance) {
+            sortableInstance.destroy();
+            sortableInstance = null;
+        }
+
+        const listEl = document.getElementById('node-list');
+        if (listEl && nodesContent && nodesContent.trim()) {
+            sortableInstance = new Sortable(listEl, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                delay: 200, 
+                delayOnTouchOnly: true, 
+                onEnd: function() {
+                    saveNodeOrder();
+                }
+            });
+        }
 
     } catch (error) { dataContainer.textContent = '状态: 需要登录或服务器离线'; }
 }
