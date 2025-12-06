@@ -141,25 +141,20 @@ h1 {
     overflow: hidden;
 }
 
-/* --- 核心修改开始 --- */
-/* 左侧列布局调整 */
 .column:first-child .terminal-box {
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
 
-/* 上方（添加）方框：分配 55% 的空间 */
 .column:first-child .terminal-box:first-child {
-    flex: 1.2; /* 比下方稍微大一点 */
+    flex: 1.2; 
 }
 
-/* 下方（删除）方框：分配 45% 的空间 */
 .column:first-child .terminal-box:last-child {
     flex: 1; 
     margin-bottom: 0;
 }
-/* --- 核心修改结束 --- */
 
 .terminal-box {
     border: var(--border-style);
@@ -352,4 +347,27 @@ textarea {
     .footer { margin-top: 20px; }
     textarea { height: 120px; flex: none; }
     .column:first-child .terminal-box { display: block; flex: none; }
+}
+
+.node-item {
+    cursor: grab;
+    padding: 4px 0;
+    border-left: 2px solid transparent;
+    border-bottom: 1px dotted #003300;
+    transition: background-color 0.2s;
+    touch-action: manipulation;
+}
+
+.node-item:hover {
+    border-left: 2px solid #00ff00;
+    background-color: rgba(0, 255, 0, 0.05);
+}
+
+.node-item:active {
+    cursor: grabbing;
+}
+
+.sortable-ghost {
+    opacity: 0.5;
+    background-color: #004400;
 }
