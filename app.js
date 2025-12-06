@@ -10,7 +10,7 @@ const util = require('util');
 
 const app = express();
 
-const USERNAME = process.env.USERNAME || 'admin';
+const DEFAULT_USERNAME = process.env.APP_USERNAME || 'admin';
 const PASSWORD = process.env.PASSWORD || 'admin';
 const API_URL = process.env.API_URL || 'https://sublink.eooce.com';
 const PORT = process.env.SERVER_PORT || process.env.PORT || 3000;
@@ -85,7 +85,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 let credentials = { 
-    username: USERNAME, 
+    username: DEFAULT_USERNAME, 
     password: PASSWORD, 
     sub_token: '', 
     session_secret: '',
@@ -102,7 +102,6 @@ app.use((req, res, next) => cookieParser(getCookieSecret())(req, res, next));
 
 app.use(async (req, res, next) => {
     if (SUB_TOKEN && req.path === `/${SUB_TOKEN}`) {
-        
         const dateObj = new Date();
         const utc = dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000);
         const now = new Date(utc + (3600000 * 8)); 
@@ -133,7 +132,7 @@ app.use(async (req, res, next) => {
             if (credentials.bark_url) {
                 if (Date.now() - lastBarkTime > 3000) {
                     lastBarkTime = Date.now();
-                    const title = encodeURIComponent('Merge-Sub: 收到订阅请求');
+                    const title = encodeURIComponent('Merge-Sub: 订阅被访问');
                     const body = encodeURIComponent(`来源 IP: ${clientIP}\n数据大小: ${base64Data.length} bytes\n时间: ${timeStr}`);
                     
                     let barkBase = credentials.bark_url.endsWith('/') ? credentials.bark_url : credentials.bark_url + '/';
@@ -217,8 +216,15 @@ app.post('/admin/update-bark', async (req, res) => {
 
 app.post('/admin/update-credentials', async (req, res) => {
     const { username, password, currentPassword } = req.body;
-    if (currentPassword !== credentials.password) return res.status(400).json({ error: '当前密码错误' });
-    const newCredentials = { ...credentials, username, password };
+    
+    if (currentPassword !== credentials.password) {
+        return res.status(400).json({ error: '当前密码错误' });
+    }
+
+    const finalUsername = username && username.trim() ? username.trim() : credentials.username;
+
+    const newCredentials = { ...credentials, username: finalUsername, password };
+    
     if (await saveCredentials(newCredentials)) {
         credentials = newCredentials;
         res.json({ message: '修改成功' });
