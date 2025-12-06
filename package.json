@@ -1,0 +1,19 @@
+{
+    "name": "merge-sub",
+    "version": "1.1.0",
+    "description": "nodejs",
+    "author": "leojyenn",
+    "license": "MIT",
+    "main": "app.js",
+    "scripts": {
+        "start": "node app.js"
+    },
+    "dependencies": {
+        "axios": "^1.7.9",
+        "cookie-parser": "^1.4.6",
+        "express": "latest"
+    },
+    "engines": {
+        "node": ">=14"
+    }
+}
