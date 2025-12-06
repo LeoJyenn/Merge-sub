@@ -10,6 +10,9 @@ const util = require('util');
 
 const app = express();
 
+// 核心设置：信任前端代理 (Nginx/Cloudflare等)
+app.set('trust proxy', true);
+
 const DEFAULT_USERNAME = process.env.APP_USERNAME || 'admin';
 const PASSWORD = process.env.PASSWORD || 'admin';
 const API_URL = process.env.API_URL || 'https://sublink.eooce.com';
@@ -107,10 +110,25 @@ app.use(async (req, res, next) => {
         const now = new Date(utc + (3600000 * 8)); 
         const timeStr = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
         
-        let clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-        if (clientIP.includes('::ffff:')) clientIP = clientIP.split('::ffff:')[1];
+        let rawIP = req.headers['cf-connecting-ip'] || 
+                    req.headers['x-real-ip'] || 
+                    req.headers['x-forwarded-for'] || 
+                    req.socket.remoteAddress || '';
+
+        if (typeof rawIP === 'string' && rawIP.includes(',')) {
+            rawIP = rawIP.split(',')[0];
+        }
+
+        let clientIP = (rawIP || '').toString().trim();
+
+        if (clientIP.includes('::ffff:')) {
+            clientIP = clientIP.split('::ffff:')[1];
+        }
 
         console.log(`${timeStr} 收到订阅请求 -> 来源: ${clientIP}`);
+        
+        // --- 调试模式：取消注释下面这行可以看到所有 Header，帮助你排查是不是 Nginx 没传 IP ---
+        // console.log('Debug Headers:', JSON.stringify(req.headers)); 
 
         try {
             if (req.query.CFIP && req.query.CFPORT) {
@@ -132,7 +150,7 @@ app.use(async (req, res, next) => {
             if (credentials.bark_url) {
                 if (Date.now() - lastBarkTime > 3000) {
                     lastBarkTime = Date.now();
-                    const title = encodeURIComponent('Merge-Sub: 订阅被访问');
+                    const title = encodeURIComponent('Merge-Sub: 收到订阅请求');
                     const body = encodeURIComponent(`来源 IP: ${clientIP}\n数据大小: ${base64Data.length} bytes\n时间: ${timeStr}`);
                     
                     let barkBase = credentials.bark_url.endsWith('/') ? credentials.bark_url : credentials.bark_url + '/';
