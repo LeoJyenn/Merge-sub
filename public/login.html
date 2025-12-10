@@ -3,89 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>系统访问控制</title>
+    <title>Merge-sub · 系统登录</title>
     <link rel="icon" href="/icon.png">
     <link rel="apple-touch-icon" href="/icon.png">
     <link href="/index.css" rel="stylesheet">
     <style>
         body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-header-grad);
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 12px 30px rgba(15,23,42,0.18);
+            border: 1px solid #e0e4f2;
             overflow: hidden;
         }
-        .auth-box {
-            width: 400px;
-            max-width: 90%;
-            padding: 20px;
-            border: 1px solid var(--terminal-green);
-            background: rgba(0, 20, 0, 0.8);
-            box-shadow: 0 0 20px var(--terminal-green);
+        .login-header {
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #6a5dfc, #8548ff);
+            color: #ffffff;
         }
-        .form-group { margin-bottom: 20px; }
-        .label { display: block; margin-bottom: 5px; color: var(--terminal-green); font-weight: bold; }
-        .login-btn { width: 100%; margin-top: 10px; font-size: 16px; }
-        
-        input[type="text"], input[type="password"] {
-            font-size: 16px !important;
+        .login-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .login-sub {
+            margin-top: 3px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .login-body {
+            padding: 18px 20px 20px;
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e4f2;
+            background: #ffffff;
+            outline: none;
+            font-size: 15px;
+        }
+        .form-input:focus {
+            border-color: #6a5dfc;
+            box-shadow: 0 0 0 1px rgba(106,93,252,0.2);
+        }
+        .login-btn {
+            width: 100%;
+            margin-top: 8px;
+            padding: 10px 0;
+            border-radius: 999px;
+            border: none;
+            background: #6a5dfc;
+            color: #ffffff;
+            font-size: 15px;
+            cursor: pointer;
+            font-weight: 500;
+            box-shadow: 0 8px 20px rgba(106,93,252,0.35);
+        }
+        .login-btn:hover {
+            background: #4c3ce6;
         }
     </style>
 </head>
 <body>
-    <div class="matrix-bg"></div>
-    
-    <div class="auth-box">
-        <h1 class="glitch" style="margin-top:0; font-size: 2em;">系统登录</h1>
-        <div class="terminal-header" style="width: 100%; box-sizing: border-box;">>> 身份验证</div>
-        
-        <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="form-group">
-                <label class="label">> 用户名:</label>
-                <input type="text" id="username" autocomplete="username" required>
-            </div>
-            <div class="form-group">
-                <label class="label">> 访问密钥:</label>
-                <input type="password" id="password" autocomplete="current-password" required>
-            </div>
-            <button type="submit" class="cmd-btn add-btn login-btn">[ 进入系统 ]</button>
-        </form>
+
+<div class="login-card">
+    <div class="login-header">
+        <div class="login-title">系统登录</div>
+        <div class="login-sub">请输入管理员凭证进入管理面板</div>
     </div>
 
-    <script>
-        async function handleLogin(e) {
-            e.preventDefault();
-            const btn = document.querySelector('.login-btn');
-            const originalText = btn.textContent;
-            btn.textContent = "[ 验证中... ]";
-            btn.disabled = true;
+    <div class="login-body">
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label class="form-label">用户名</label>
+                <input type="text" id="username" class="form-input" autocomplete="username" required>
+            </div>
 
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            <div class="form-group">
+                <label class="form-label">访问密钥</label>
+                <input type="password" id="password" class="form-input" autocomplete="current-password" required>
+            </div>
 
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
+            <button type="submit" class="login-btn" id="loginBtn">进入系统</button>
+        </form>
+    </div>
+</div>
 
-                const result = await response.json();
+<script>
+async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const old = btn.textContent;
+    btn.textContent = "验证中...";
+    btn.disabled = true;
 
-                if (response.ok) {
-                    btn.textContent = "[ 验证通过 ]";
-                    setTimeout(() => window.location.href = '/', 500);
-                } else {
-                    alert(result.error || '登录失败');
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                }
-            } catch (error) {
-                alert('连接服务器失败');
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await response.json();
+
+        if (response.ok) {
+            btn.textContent = "验证通过";
+            setTimeout(() => window.location.href = '/', 300);
+        } else {
+            alert(result.error || '登录失败');
+            btn.textContent = old;
+            btn.disabled = false;
         }
-    </script>
+    } catch (err) {
+        alert('连接服务器失败');
+        btn.textContent = old;
+        btn.disabled = false;
+    }
+}
+</script>
+
 </body>
 </html>

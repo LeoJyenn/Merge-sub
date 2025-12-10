@@ -26,9 +26,9 @@ let SUB_TOKEN = '';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const CREDENTIALS_FILE = path.join(DATA_DIR, 'credentials.json');
-const LOG_DIR = path.join(DATA_DIR, 'logs'); 
+const LOG_DIR = path.join(DATA_DIR, 'logs');
 
-const LOG_RETENTION_DAYS = 7; 
+const LOG_RETENTION_DAYS = 7;
 
 if (!fsSync.existsSync(LOG_DIR)) {
     fsSync.mkdirSync(LOG_DIR, { recursive: true });
@@ -45,7 +45,7 @@ function getLogFileName() {
 
 function writeToLogFile(type, args) {
     const now = new Date();
-    const timeStr = `[${now.toLocaleTimeString('en-GB', { hour12: false })}]`; 
+    const timeStr = `[${now.toLocaleTimeString('en-GB', { hour12: false })}]`;
     const msg = util.format.apply(null, args);
     const logLine = `${timeStr} [${type}] ${msg}\n`;
     try {
@@ -91,7 +91,9 @@ let credentials = {
     password: PASSWORD, 
     sub_token: '', 
     session_secret: '',
-    bark_url: ''
+    bark_url: '',
+    cf_ip: CFIP,
+    cf_port: CFPORT
 };
 
 let lastBarkTime = 0;
@@ -106,26 +108,20 @@ app.use(async (req, res, next) => {
     if (SUB_TOKEN && req.path === `/${SUB_TOKEN}`) {
         const dateObj = new Date();
         const utc = dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000);
-        const now = new Date(utc + (3600000 * 8)); 
+        const now = new Date(utc + (3600000 * 8));
         const timeStr = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
-        
-        let rawIP = req.headers['cf-connecting-ip'] || 
-                    req.headers['x-real-ip'] || 
-                    req.headers['x-forwarded-for'] || 
+
+        let rawIP = req.headers['cf-connecting-ip'] ||
+                    req.headers['x-real-ip'] ||
+                    req.headers['x-forwarded-for'] ||
                     req.socket.remoteAddress || '';
 
-        if (typeof rawIP === 'string' && rawIP.includes(',')) {
-            rawIP = rawIP.split(',')[0];
-        }
-
-        let clientIP = (rawIP || '').toString().trim();
-
-        if (clientIP.includes('::ffff:')) {
-            clientIP = clientIP.split('::ffff:')[1];
-        }
+        let clientIP = rawIP;
+        if (clientIP.startsWith('::ffff:')) clientIP = clientIP.substring(7);
+        if (clientIP.includes(',')) clientIP = clientIP.split(',')[0].trim();
 
         console.log(`${timeStr} 收到订阅请求 -> 来源: ${clientIP}`);
-        
+
         try {
             if (req.query.CFIP && req.query.CFPORT) {
                 CFIP = req.query.CFIP;
@@ -133,30 +129,31 @@ app.use(async (req, res, next) => {
             }
             await loadData();
             const merged = await generateMergedSubscription();
-            
+
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Access-Control-Allow-Origin', '*'); 
-            res.setHeader('Cache-Control', 'no-store'); 
-            
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Cache-Control', 'no-store');
+
             const base64Data = Buffer.from(merged).toString('base64');
             res.send(base64Data);
-            
+
             console.log(`${timeStr} 订阅生成成功 (${base64Data.length} bytes)`);
 
             if (credentials.bark_url) {
                 if (Date.now() - lastBarkTime > 3000) {
                     lastBarkTime = Date.now();
                     const title = encodeURIComponent('Merge-Sub: 收到订阅请求');
-                    const body = encodeURIComponent(`来源 IP: ${clientIP}\n数据大小: ${base64Data.length} bytes\n时间: ${timeStr}`);
-                    
+                    const body = encodeURIComponent(`来源 IP:...${clientIP}\n数据大小: ${base64Data.length} bytes\n时间: ${timeStr}`);
+
                     let barkBase = credentials.bark_url.endsWith('/') ? credentials.bark_url : credentials.bark_url + '/';
-                    
+
                     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
                     const host = req.get('host');
-                    const iconUrl = `${protocol}://${host}/icon.png`;
-                    
-                    const targetUrl = `${barkBase}${title}/${body}?icon=${iconUrl}`;
-                    
+                    const fullSubUrl = `${protocol}://${host}/${SUB_TOKEN}`;
+                    const subUrlEncoded = encodeURIComponent(fullSubUrl);
+
+                    const targetUrl = `${barkBase}${title}/${body}?url=${subUrlEncoded}`;
+
                     axios.get(targetUrl).catch(e => console.error('Bark 推送失败:', e.message));
                 }
             }
@@ -228,6 +225,26 @@ app.post('/admin/update-bark', async (req, res) => {
     }
 });
 
+app.get('/admin/get-cf-config', (req, res) => {
+    res.json({ ip: CFIP, port: CFPORT });
+});
+
+app.post('/admin/update-cf-config', async (req, res) => {
+    const ip = (req.body.ip || req.body.cfip || '').toString().trim();
+    const port = (req.body.port || req.body.cfport || '').toString().trim();
+    const finalIp = ip || CFIP || 'time.is';
+    const finalPort = port || CFPORT || '443';
+    CFIP = finalIp;
+    CFPORT = finalPort;
+    const newCredentials = { ...credentials, cf_ip: CFIP, cf_port: CFPORT };
+    if (await saveCredentials(newCredentials)) {
+        credentials = newCredentials;
+        res.json({ message: 'ok', ip: CFIP, port: CFPORT });
+    } else {
+        res.status(500).json({ error: '保存失败' });
+    }
+});
+
 app.post('/admin/update-credentials', async (req, res) => {
     const { username, password, currentPassword } = req.body;
     
@@ -280,89 +297,44 @@ app.post('/admin/restore', async (req, res) => {
     }
 });
 
-function tryDecodeBase64(str) {
-    try {
-        if (/^[A-Za-z0-9+/=]+$/.test(str)) {
-            const d = Buffer.from(str, 'base64').toString('utf-8');
-            if (d.match(/^(vmess|vless|trojan|ss|ssr|snell|juicity|hysteria2?|tuic|anytls|wireguard|socks5|http|https):/)) return d;
-        }
-    } catch {}
-    return str;
-}
-
 app.post('/admin/add-subscription', async (req, res) => {
-    const input = req.body.subscription?.trim();
-    if (!input) return res.status(400).json({ error: 'Empty' });
-    if (!Array.isArray(subscriptions)) subscriptions = [];
-    const list = input.split('\n').map(s => s.trim()).filter(s => s);
-    let addedCount = 0;
-    list.forEach(s => { 
-        if (!subscriptions.includes(s)) { subscriptions.push(s); addedCount++; } 
-    });
-    if (addedCount > 0) {
-        await saveData(subscriptions, nodes);
-        res.json({ message: `成功添加 ${addedCount} 个订阅` });
-    } else {
-        res.json({ error: '订阅已存在' });
-    }
-});
-
-app.post('/admin/add-node', async (req, res) => {
-    const input = req.body.node?.trim();
-    if (!input) return res.status(400).json({ error: 'Empty' });
-    let nodeList = typeof nodes === 'string' ? nodes.split('\n').map(n => n.trim()).filter(n => n) : [];
-    const list = input.split('\n').map(n => tryDecodeBase64(n.trim())).filter(n => n);
-    let addedCount = 0;
-    list.forEach(n => { 
-        if (!nodeList.includes(n)) { nodeList.push(n); addedCount++; } 
-    });
-    if (addedCount > 0) {
-        nodes = nodeList.join('\n');
-        await saveData(subscriptions, nodes);
-        res.json({ message: `成功添加 ${addedCount} 个节点` });
-    } else {
-        res.json({ error: '节点已存在' });
-    }
+    const url = req.body.subscription;
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'Invalid subscription URL' });
+    if (!subscriptions.includes(url)) subscriptions.push(url);
+    await saveData(subscriptions, nodes);
+    res.json({ message: 'Subscription added' });
 });
 
 app.post('/admin/delete-subscription', async (req, res) => {
-    const input = req.body.subscription?.trim();
-    if (!input) return res.status(400).json({ error: 'Empty' });
-    
-    const targets = input.split('\n').map(s => s.trim()).filter(s => s);
-    const oldLen = subscriptions.length;
-    
-    const targetSet = new Set(targets);
-    subscriptions = subscriptions.filter(s => !targetSet.has(s));
-    
-    if (subscriptions.length < oldLen) {
-        await saveData(subscriptions, nodes);
-        res.json({ message: '删除成功' });
-    } else {
-        res.json({ error: '未找到目标数据' });
-    }
+    const url = req.body.subscription;
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'Invalid subscription URL' });
+    subscriptions = subscriptions.filter(s => s !== url);
+    await saveData(subscriptions, nodes);
+    res.json({ message: 'Subscription deleted' });
+});
+
+app.post('/admin/add-node', async (req, res) => {
+    const input = req.body.node;
+    if (!input || typeof input !== 'string') return res.status(400).json({ error: 'Invalid node data' });
+    const lines = input.split('\n').map(l => l.trim()).filter(l => l);
+    if (!nodes) nodes = lines.join('\n');
+    else nodes += '\n' + lines.join('\n');
+    await saveData(subscriptions, nodes);
+    res.json({ message: 'Node(s) added' });
 });
 
 app.post('/admin/delete-node', async (req, res) => {
-    const input = req.body.node?.trim();
-    if (!input) return res.status(400).json({ error: 'Empty' });
-    
-    const targetsRaw = input.split('\n').map(n => n.trim()).filter(n => n);
-    const targetsDecoded = targetsRaw.map(n => tryDecodeBase64(n));
-    
-    let nodeList = typeof nodes === 'string' && nodes ? nodes.split('\n').map(n => n.trim()).filter(n => n) : [];
-    const oldLen = nodeList.length;
-    
-    const targetSet = new Set([...targetsRaw, ...targetsDecoded]);
-    
-    nodeList = nodeList.filter(n => !targetSet.has(n));
-    
-    if (nodeList.length < oldLen) {
+    const node = req.body.node;
+    if (!node || typeof node !== 'string') return res.status(400).json({ error: 'Invalid node' });
+    const nodeList = typeof nodes === 'string' ? nodes.split('\n').map(n => n.trim()).filter(n => n) : [];
+    const idx = nodeList.indexOf(node.trim());
+    if (idx !== -1) {
+        nodeList.splice(idx, 1);
         nodes = nodeList.join('\n');
         await saveData(subscriptions, nodes);
-        res.json({ message: `成功删除 ${oldLen - nodeList.length} 个节点` });
+        res.json({ message: 'Node deleted' });
     } else {
-        res.json({ error: '未找到目标数据' });
+        res.status(404).json({ error: 'Node not found' });
     }
 });
 
@@ -388,7 +360,7 @@ function generateRandomString(length = 24) {
 }
 
 async function ensureDataDir() {
-    try { await fs.access(DATA_DIR); } 
+    try { await fs.access(DATA_DIR); }
     catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
 }
 
@@ -402,12 +374,18 @@ async function initializeCredentialsFile() {
             let changed = false;
             if (!credentials.sub_token) { credentials.sub_token = generateRandomString(); changed = true; }
             if (!credentials.session_secret) { credentials.session_secret = generateRandomString(32); changed = true; }
+            if (!credentials.cf_ip) { credentials.cf_ip = CFIP; changed = true; }
+            if (!credentials.cf_port) { credentials.cf_port = CFPORT; changed = true; }
+            CFIP = credentials.cf_ip || CFIP;
+            CFPORT = credentials.cf_port || CFPORT;
             SUB_TOKEN = credentials.sub_token;
             if (changed) await saveCredentials(credentials);
         } catch {
             SUB_TOKEN = process.env.SUB_TOKEN || generateRandomString();
             credentials.sub_token = SUB_TOKEN;
             credentials.session_secret = generateRandomString(32);
+            credentials.cf_ip = CFIP;
+            credentials.cf_port = CFPORT;
             await fs.writeFile(CREDENTIALS_FILE, JSON.stringify(credentials, null, 2), 'utf8');
         }
     } catch (error) { console.error('Cred error:', error); }
@@ -489,7 +467,7 @@ async function startServer() {
     await ensureDataDir();
     await initializeCredentialsFile();
     await initializeDataFile();
-    await cleanOldLogs(); 
+    await cleanOldLogs();
     app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 }
 startServer();
