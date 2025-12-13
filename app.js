@@ -149,11 +149,6 @@ app.use(async (req, res, next) => {
 
                     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
                     const host = req.get('host');
-                    const fullSubUrl = `${protocol}://${host}/${SUB_TOKEN}`;
-                    const subUrlEncoded = encodeURIComponent(fullSubUrl);
-
-                    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-                    const host = req.get('host');
                     const iconUrl = `${protocol}://${host}/icon.png`;
                     const targetUrl = `${barkBase}${title}/${body}?icon=${encodeURIComponent(iconUrl)}&sound=alarm`;
 
