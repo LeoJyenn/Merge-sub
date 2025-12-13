@@ -152,7 +152,10 @@ app.use(async (req, res, next) => {
                     const fullSubUrl = `${protocol}://${host}/${SUB_TOKEN}`;
                     const subUrlEncoded = encodeURIComponent(fullSubUrl);
 
-                    const targetUrl = `${barkBase}${title}/${body}?url=${subUrlEncoded}`;
+                    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+                    const host = req.get('host');
+                    const iconUrl = `${protocol}://${host}/icon.png`;
+                    const targetUrl = `${barkBase}${title}/${body}?icon=${encodeURIComponent(iconUrl)}&sound=alarm`;
 
                     axios.get(targetUrl).catch(e => console.error('Bark 推送失败:', e.message));
                 }
