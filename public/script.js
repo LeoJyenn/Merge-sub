@@ -12,6 +12,8 @@ let typeCounts = {};
 let currentFilterKey = null;
 let overlayCount = 0;
 let saveCfConfigTimer = null;
+let activeRemarkEdit = null;
+
 
 function lockBodyScroll() {
     if (overlayCount === 0) {
@@ -219,11 +221,12 @@ async function configureBark() {
 
 function cleanNodeRemarks(nodeLink) {
     let clean = nodeLink.split('#')[0];
-    clean = clean.replace(/([?&])(remarks|remark|name|ps)=[^&]*/gi, '');
+    clean = clean.replace(/([?&])(remarks|remark|name|ps|tag|label|alias|desc|title)=[^&]*/gi, '');
     clean = clean.replace(/&&/g, '&').replace(/\?&/g, '?');
     if (clean.endsWith('&') || clean.endsWith('?')) clean = clean.slice(0, -1);
     return clean;
 }
+
 
 function decodeSafe(str) {
     try {
@@ -245,7 +248,7 @@ function getNodeRemark(nodeLink) {
                 qsPart = qsPart.substring(0, hashIndex);
             }
             const params = new URLSearchParams(qsPart);
-            remark = params.get('remarks') || params.get('remark') || params.get('name') || params.get('ps') || '';
+            remark = params.get('remarks') || params.get('remark') || params.get('name') || params.get('ps') || params.get('tag') || params.get('label') || params.get('alias') || params.get('desc') || params.get('title') || '';
         }
         if (!remark && nodeLink.includes('#')) {
             const hashPart = nodeLink.split('#').slice(1).join('#');
@@ -256,7 +259,31 @@ function getNodeRemark(nodeLink) {
             try {
                 const jsonStr = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
                 const obj = JSON.parse(jsonStr);
-                remark = obj.ps || obj.name || '';
+                remark = obj.ps || obj.name || obj.remark || obj.tag || '';
+            } catch {}
+        }
+        if (!remark && nodeLink.startsWith('ssr://')) {
+            const b64 = nodeLink.slice(6).trim();
+            try {
+                const jsonStr = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+                if (jsonStr && jsonStr.includes('remarks=')) {
+                    const parts = jsonStr.split('/?');
+                    if (parts[1]) {
+                        const params = new URLSearchParams(parts[1]);
+                        const r = params.get('remarks') || params.get('remark') || params.get('tag');
+                        if (r) {
+                            remark = decodeSafe(atob(r.replace(/-/g, '+').replace(/_/g, '/')));
+                        }
+                    }
+                }
+            } catch {}
+        }
+        if (!remark && (nodeLink.startsWith('ss://') || nodeLink.startsWith('trojan://') || nodeLink.startsWith('vless://') || nodeLink.startsWith('tuic://') || nodeLink.startsWith('hysteria://') || nodeLink.startsWith('hysteria2://') || nodeLink.startsWith('hy2://') || nodeLink.startsWith('wireguard://') || nodeLink.startsWith('wg://'))) {
+            try {
+                const u = new URL(nodeLink);
+                if (u.hash) {
+                    remark = u.hash.replace('#', '');
+                }
             } catch {}
         }
         if (!remark) return '';
@@ -265,6 +292,7 @@ function getNodeRemark(nodeLink) {
         return '';
     }
 }
+
 
 function getProtocol(node) {
     if (!node) return '未知';
@@ -506,17 +534,19 @@ function renderNodeList() {
             const remarkText = remark || '';
             const formattedLink = node;
             const encoded = encodeURIComponent(node).replace(/'/g, '%27');
-            const remarkCell = remarkText ? `<span class="node-remark">${remarkText}</span>` : `<span class="node-remark node-remark-empty">未备注</span>`;
+            const remarkCell = remarkText ? `<span class="node-remark" onclick="startEditRemark(this, '${encoded}'); event.stopPropagation();">${remarkText}</span>` : `<span class="node-remark node-remark-empty" onclick="startEditRemark(this, '${encoded}'); event.stopPropagation();">未备注</span>`;
             return `
 <div class="node-item" data-raw="${encoded}">
     <div class="node-col node-col-index">
         <input type="number" class="node-index-input" value="${index + 1}" min="1" onchange="changeNodeIndex(this)">
+        <span class="node-protocol">${getProtocol(node)}</span>
     </div>
     <div class="node-col node-col-remark">${remarkCell}</div>
     <div class="node-col node-col-content">
         <div class="node-content-box">${formattedLink}</div>
     </div>
     <div class="node-col node-col-actions">
+        <button class="node-btn node-btn-secondary" onclick="startEditRemark(this, '${encoded}'); event.stopPropagation();">编辑备注</button>
         <button class="node-btn" onclick="copyNode(this, '${encoded}'); event.stopPropagation();">复制</button>
         <button class="node-btn node-btn-danger" onclick="deleteNode('${encoded}'); event.stopPropagation();">删除</button>
     </div>
@@ -536,8 +566,12 @@ function renderNodeList() {
         sortableInstance = new Sortable(listEl, {
             animation: 150,
             ghostClass: 'sortable-ghost',
-            delay: 200,
+            delay: 220,
             delayOnTouchOnly: true,
+            touchStartThreshold: 8,
+            filter: '.node-index-input, .node-btn, .node-remark, .node-remark-edit, .node-content-box',
+            preventOnFilter: false,
+            draggable: '.node-item',
             onEnd: function () {
                 const allInputs = listEl.querySelectorAll('.node-index-input');
                 allInputs.forEach((el, idx) => {
@@ -548,6 +582,7 @@ function renderNodeList() {
         });
     }
 }
+
 
 async function fetchData() {
     const dataContainer = document.getElementById('data');
@@ -634,6 +669,109 @@ async function saveCfConfig(ip, port) {
     } catch {}
 }
 
+function updateNodeRemark(node, newRemark) {
+    const cleanLine = cleanNodeRemarks(node);
+    if (!newRemark) return cleanLine;
+    return cleanLine + '#' + encodeURIComponent(newRemark);
+}
+
+function startEditRemark(triggerEl, encoded) {
+    const node = decodeURIComponent(encoded);
+    if (!node) return;
+    if (activeRemarkEdit && activeRemarkEdit.encoded !== encoded) {
+        cancelRemarkEdit(activeRemarkEdit.input, activeRemarkEdit.original, activeRemarkEdit.encoded);
+    }
+    let remarkContainer = triggerEl.closest('.node-col-remark');
+    if (!remarkContainer) {
+        const escape = window.CSS && CSS.escape ? CSS.escape : (value) => value.replace(/"/g, '\\"');
+        const item = document.querySelector(`.node-item[data-raw="${escape(encoded)}"]`);
+        if (item) {
+            remarkContainer = item.querySelector('.node-col-remark');
+        }
+    }
+    if (!remarkContainer) return;
+    const remarkSpan = remarkContainer.querySelector('.node-remark');
+    const originalText = remarkSpan ? remarkSpan.textContent.trim() : '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'node-remark-edit';
+    input.value = originalText === '未备注' ? '' : originalText;
+    input.placeholder = '备注';
+    remarkContainer.innerHTML = '';
+    remarkContainer.appendChild(input);
+    input.focus();
+    input.select();
+    const save = async () => {
+        const newRemark = input.value.trim();
+        await saveRemarkEdit(input, node, newRemark, originalText, encoded);
+    };
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            save();
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelRemarkEdit(input, originalText, encoded);
+        }
+    });
+    input.addEventListener('blur', () => {
+        save();
+    });
+    activeRemarkEdit = { input, original: originalText, encoded };
+}
+
+async function saveRemarkEdit(input, node, newRemark, originalText, encoded) {
+    const remarkContainer = input.closest('.node-col-remark');
+    if (!remarkContainer) return;
+    const updatedNode = updateNodeRemark(node, newRemark);
+    if (updatedNode === node) {
+        restoreRemarkCell(remarkContainer, originalText, encoded);
+        activeRemarkEdit = null;
+        return;
+    }
+    const idx = allNodes.indexOf(node);
+    if (idx === -1) {
+        restoreRemarkCell(remarkContainer, originalText, encoded);
+        activeRemarkEdit = null;
+        return;
+    }
+    allNodes[idx] = updatedNode;
+    try {
+        const response = await fetch('/admin/update-node-remark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                oldNode: node,
+                newNode: updatedNode
+            })
+        });
+        if (!response.ok) {
+            throw new Error('update failed');
+        }
+        renderNodeList();
+    } catch (e) {
+        allNodes[idx] = node;
+        restoreRemarkCell(remarkContainer, originalText, encoded);
+        showAlert('备注更新失败');
+    } finally {
+        activeRemarkEdit = null;
+    }
+}
+
+function cancelRemarkEdit(input, originalText, encoded) {
+    const remarkContainer = input.closest('.node-col-remark');
+    if (!remarkContainer) return;
+    restoreRemarkCell(remarkContainer, originalText, encoded);
+    activeRemarkEdit = null;
+}
+
+function restoreRemarkCell(container, originalText, encoded) {
+    const text = originalText && originalText !== '未备注' ? originalText : '未备注';
+    container.innerHTML = `<span class="node-remark ${text === '未备注' ? 'node-remark-empty' : ''}" onclick="startEditRemark(this, '${encoded}'); event.stopPropagation();">${text}</span>`;
+}
+
+
 async function showSubscriptionInfo() {
     try {
         const response = await fetch('/get-sub-token?t=' + Date.now());
@@ -719,23 +857,24 @@ async function showSubscriptionInfo() {
                 const tipSpan = document.createElement('span');
                 tipSpan.className = 'subscription-url-tip';
                 tipSpan.textContent = '已复制';
-                const scheduleSave = () => {
-                    if (saveCfConfigTimer) clearTimeout(saveCfConfigTimer);
-                    saveCfConfigTimer = setTimeout(() => {
-                        saveCfConfig(cfState.ip || 'time.is', cfState.port || '443');
-                    }, 500);
-                };
                 const updateUrl = () => {
                     const ip = ipInput.value.trim() || 'time.is';
                     const port = portInput.value.trim() || '443';
                     cfState.ip = ip;
                     cfState.port = port;
                     textSpan.textContent = `${currentDomain}/${subToken}?CFIP=${encodeURIComponent(ip)}&CFPORT=${encodeURIComponent(port)}`;
-                    scheduleSave();
                 };
                 ipInput.oninput = updateUrl;
                 portInput.oninput = updateUrl;
                 updateUrl();
+                const saveButton = document.createElement('button');
+                saveButton.className = 'alert-button';
+                saveButton.textContent = '保存优选 IP';
+                saveButton.style.marginTop = '8px';
+                saveButton.onclick = async () => {
+                    await saveCfConfig(cfState.ip || 'time.is', cfState.port || '443');
+                    showAlert('优选 IP 已保存', false, null, false);
+                };
                 urlDiv.addEventListener('click', async function (e) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -752,8 +891,10 @@ async function showSubscriptionInfo() {
                 urlDiv.appendChild(textSpan);
                 urlDiv.appendChild(tipSpan);
                 line.appendChild(urlDiv);
+                line.appendChild(saveButton);
                 return line;
             } else {
+
                 const urlDiv = document.createElement('div');
                 urlDiv.className = 'subscription-url';
                 const textSpan = document.createElement('span');
@@ -789,13 +930,11 @@ async function showSubscriptionInfo() {
         closeButton.className = 'alert-button';
         closeButton.textContent = '关闭';
         closeButton.onclick = async () => {
-            try {
-                await saveCfConfig(cfState.ip || 'time.is', cfState.port || '443');
-            } catch {}
             document.body.removeChild(overlay);
             unlockBodyScroll();
         };
         alertBox.appendChild(closeButton);
+
         overlay.appendChild(alertBox);
         document.body.appendChild(overlay);
         lockBodyScroll();

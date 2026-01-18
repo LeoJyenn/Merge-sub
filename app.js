@@ -336,6 +336,24 @@ app.post('/admin/delete-node', async (req, res) => {
     }
 });
 
+app.post('/admin/update-node-remark', async (req, res) => {
+    const oldNode = req.body.oldNode;
+    const newNode = req.body.newNode;
+    if (!oldNode || !newNode || typeof oldNode !== 'string' || typeof newNode !== 'string') {
+        return res.status(400).json({ error: 'Invalid node data' });
+    }
+    const nodeList = typeof nodes === 'string' ? nodes.split('\n').map(n => n.trim()).filter(n => n) : [];
+    const idx = nodeList.indexOf(oldNode.trim());
+    if (idx === -1) {
+        return res.status(404).json({ error: 'Node not found' });
+    }
+    nodeList[idx] = newNode.trim();
+    nodes = nodeList.join('\n');
+    await saveData(subscriptions, nodes);
+    res.json({ message: 'Remark updated' });
+});
+
+
 app.post('/admin/save-nodes', async (req, res) => {
     const input = req.body.nodes;
     if (typeof input !== 'string') return res.status(400).json({ error: 'Invalid data' });
