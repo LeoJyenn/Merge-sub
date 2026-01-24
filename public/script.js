@@ -13,12 +13,34 @@ let currentFilterKey = null;
 let overlayCount = 0;
 let saveCfConfigTimer = null;
 let activeRemarkEdit = null;
+let modalShell = null;
+let lastScrollTop = 0;
+let lastScrollAnchor = null;
+let freezeTarget = null;
 
 
 function lockBodyScroll() {
     if (overlayCount === 0) {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+        document.body.dataset.scrollTop = String(scrollTop);
         document.body.dataset.prevOverflow = document.body.style.overflow || '';
+        document.body.dataset.prevPaddingRight = document.body.style.paddingRight || '';
+        document.documentElement.classList.add('modal-locked');
+        document.body.classList.add('modal-locked');
         document.body.style.overflow = 'hidden';
+        if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+        }
+        freezeTarget = document.querySelector('.container') || document.body.firstElementChild;
+        if (freezeTarget) {
+            freezeTarget.classList.add('frozen');
+            freezeTarget.style.setProperty('--freeze-offset', `-${scrollTop}px`);
+        }
+        window.scrollTo({ top: scrollTop, behavior: 'auto' });
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: scrollTop, behavior: 'auto' });
+        });
     }
     overlayCount++;
 }
@@ -26,7 +48,20 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
     overlayCount = Math.max(overlayCount - 1, 0);
     if (overlayCount === 0) {
+        const scrollTop = parseInt(document.body.dataset.scrollTop || '0', 10);
+        document.documentElement.classList.remove('modal-locked');
+        document.body.classList.remove('modal-locked');
         document.body.style.overflow = document.body.dataset.prevOverflow || '';
+        document.body.style.paddingRight = document.body.dataset.prevPaddingRight || '';
+        if (freezeTarget) {
+            freezeTarget.classList.remove('frozen');
+            freezeTarget.style.removeProperty('--freeze-offset');
+            freezeTarget = null;
+        }
+        window.scrollTo({ top: scrollTop, behavior: 'auto' });
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: scrollTop, behavior: 'auto' });
+        });
     }
 }
 
@@ -37,6 +72,49 @@ function attachOverlayTouchBlock(overlay) {
     overlay.addEventListener('wheel', function (e) {
         e.preventDefault();
     }, { passive: false });
+}
+
+function getModalShell() {
+    if (modalShell) return modalShell;
+    const overlay = document.createElement('div');
+    overlay.className = 'alert-overlay';
+    attachOverlayTouchBlock(overlay);
+    const alertBox = document.createElement('div');
+    alertBox.className = 'alert-box';
+    const title = document.createElement('div');
+    title.className = 'alert-title';
+    const body = document.createElement('div');
+    body.className = 'alert-body';
+    const footer = document.createElement('div');
+    footer.className = 'alert-footer';
+    alertBox.appendChild(title);
+    alertBox.appendChild(body);
+    alertBox.appendChild(footer);
+    overlay.appendChild(alertBox);
+    modalShell = { overlay, alertBox, title, body, footer };
+    return modalShell;
+}
+
+function openModal(titleText, width) {
+    const shell = getModalShell();
+    shell.title.textContent = titleText || '';
+    shell.body.innerHTML = '';
+    shell.footer.innerHTML = '';
+    if (width) shell.alertBox.style.width = width;
+    else shell.alertBox.style.width = '';
+    if (!document.body.contains(shell.overlay)) {
+        lockBodyScroll();
+        document.body.appendChild(shell.overlay);
+    }
+    return shell;
+}
+
+function closeModal() {
+    if (!modalShell) return;
+    if (document.body.contains(modalShell.overlay)) {
+        document.body.removeChild(modalShell.overlay);
+        unlockBodyScroll();
+    }
 }
 
 function updateBjTime() {
@@ -83,56 +161,35 @@ async function fetchSubToken() {
 }
 
 function showAlert(message, isDanger = false, callback = null, showCancel = true) {
-    const overlay = document.createElement('div');
-    overlay.className = 'alert-overlay';
-    attachOverlayTouchBlock(overlay);
-    const alertBox = document.createElement('div');
-    alertBox.className = 'alert-box';
-    const header = document.createElement('div');
-    header.textContent = '系统提示';
-    header.style.fontWeight = '600';
+    const shell = openModal('系统提示');
     const messageDiv = document.createElement('div');
     messageDiv.className = 'alert-message';
     messageDiv.textContent = message;
-    const btnContainer = document.createElement('div');
-    btnContainer.style.display = 'flex';
-    btnContainer.style.gap = '8px';
-    btnContainer.style.marginTop = '6px';
+    shell.body.appendChild(messageDiv);
     if (callback && showCancel) {
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'alert-button';
+        cancelBtn.className = 'alert-button alert-button-ghost';
         cancelBtn.textContent = '取消';
-        cancelBtn.onclick = () => {
-            document.body.removeChild(overlay);
-            unlockBodyScroll();
-        };
+        cancelBtn.onclick = () => closeModal();
         const confirmBtn = document.createElement('button');
         confirmBtn.className = isDanger ? 'alert-button alert-danger-btn' : 'alert-button';
         confirmBtn.textContent = '确认';
         confirmBtn.onclick = () => {
-            document.body.removeChild(overlay);
-            unlockBodyScroll();
+            closeModal();
             callback();
         };
-        btnContainer.appendChild(cancelBtn);
-        btnContainer.appendChild(confirmBtn);
+        shell.footer.appendChild(cancelBtn);
+        shell.footer.appendChild(confirmBtn);
     } else {
         const button = document.createElement('button');
         button.className = 'alert-button';
         button.textContent = '确认';
         button.onclick = () => {
-            document.body.removeChild(overlay);
-            unlockBodyScroll();
+            closeModal();
             if (callback) callback();
         };
-        btnContainer.appendChild(button);
+        shell.footer.appendChild(button);
     }
-    alertBox.appendChild(header);
-    alertBox.appendChild(messageDiv);
-    alertBox.appendChild(btnContainer);
-    overlay.appendChild(alertBox);
-    document.body.appendChild(overlay);
-    lockBodyScroll();
 }
 
 async function configureBark() {
@@ -144,15 +201,7 @@ async function configureBark() {
             currentUrl = data.url;
         }
     } catch {}
-    const overlay = document.createElement('div');
-    overlay.className = 'alert-overlay';
-    attachOverlayTouchBlock(overlay);
-    const alertBox = document.createElement('div');
-    alertBox.className = 'alert-box';
-    alertBox.style.width = '480px';
-    const header = document.createElement('div');
-    header.textContent = 'Bark 推送配置';
-    header.style.fontWeight = '600';
+    const shell = openModal('Bark 推送配置', '480px');
     const tip = document.createElement('div');
     tip.className = 'alert-message';
     tip.textContent = '请输入 Bark 推送链接 (例如: https://api.day.app/YourKey)。留空则关闭通知。';
@@ -175,16 +224,11 @@ async function configureBark() {
         input.style.boxShadow = 'none';
         input.style.borderColor = '#e0e4f2';
     };
-    const btnContainer = document.createElement('div');
-    btnContainer.style.display = 'flex';
-    btnContainer.style.gap = '8px';
-    btnContainer.style.marginTop = '10px';
     const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'alert-button';
+    cancelBtn.className = 'alert-button alert-button-ghost';
     cancelBtn.textContent = '取消';
     cancelBtn.onclick = () => {
-        document.body.removeChild(overlay);
-        unlockBodyScroll();
+        closeModal();
     };
     const saveBtn = document.createElement('button');
     saveBtn.className = 'alert-button';
@@ -198,8 +242,7 @@ async function configureBark() {
                 body: JSON.stringify({ url: newUrl })
             });
             if (response.ok) {
-                document.body.removeChild(overlay);
-                unlockBodyScroll();
+                closeModal();
                 showAlert('Bark 设置已保存！', false, null, false);
             } else {
                 alert('保存失败');
@@ -208,15 +251,10 @@ async function configureBark() {
             alert('请求失败');
         }
     };
-    btnContainer.appendChild(cancelBtn);
-    btnContainer.appendChild(saveBtn);
-    alertBox.appendChild(header);
-    alertBox.appendChild(tip);
-    alertBox.appendChild(input);
-    alertBox.appendChild(btnContainer);
-    overlay.appendChild(alertBox);
-    document.body.appendChild(overlay);
-    lockBodyScroll();
+    shell.body.appendChild(tip);
+    shell.body.appendChild(input);
+    shell.footer.appendChild(cancelBtn);
+    shell.footer.appendChild(saveBtn);
 }
 
 function cleanNodeRemarks(nodeLink) {
@@ -306,6 +344,104 @@ function getProtocol(node) {
     if (node.startsWith('wireguard://') || node.startsWith('wg://')) return 'WireGuard';
     if (node.startsWith('hy2://')) return 'Hysteria2';
     return '其它';
+}
+
+function encodeNode(node) {
+    return encodeURIComponent(node).replace(/'/g, '%27');
+}
+
+function getNodeItem(encoded) {
+    const escape = window.CSS && CSS.escape ? CSS.escape : (value) => value.replace(/"/g, '\\"');
+    return document.querySelector(`.node-item[data-raw="${escape(encoded)}"]`);
+}
+
+function updateNodeCount() {
+    const countEl = document.getElementById('nodeCount');
+    if (!countEl) return;
+    if (allNodes.length) countEl.textContent = '共 ' + allNodes.length + ' 个节点';
+    else countEl.textContent = '暂无节点';
+}
+
+function updateNodeIndexInputs(listEl) {
+    const allInputs = listEl.querySelectorAll('.node-index-input');
+    allInputs.forEach((el, idx) => {
+        el.value = idx + 1;
+    });
+}
+
+function rememberScrollPosition() {
+    lastScrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+}
+
+function restoreScrollPosition() {
+    if (lastScrollTop) {
+        window.scrollTo({ top: lastScrollTop, behavior: 'auto' });
+    }
+}
+
+function captureScrollAnchor(item) {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+    if (!item) {
+        return { scrollTop };
+    }
+    const anchor = item.nextElementSibling || item.previousElementSibling;
+    if (!anchor) {
+        return { scrollTop };
+    }
+    return {
+        scrollTop,
+        anchor,
+        anchorTop: anchor.getBoundingClientRect().top
+    };
+}
+
+function restoreScrollAnchor(anchorInfo) {
+    if (!anchorInfo || !anchorInfo.anchor || !document.body.contains(anchorInfo.anchor)) {
+        if (anchorInfo && typeof anchorInfo.scrollTop === 'number') {
+            window.scrollTo({ top: anchorInfo.scrollTop, behavior: 'auto' });
+        }
+        return;
+    }
+    const newTop = anchorInfo.anchor.getBoundingClientRect().top;
+    const target = anchorInfo.scrollTop + (newTop - anchorInfo.anchorTop);
+    window.scrollTo({ top: target, behavior: 'auto' });
+    requestAnimationFrame(() => {
+        window.scrollTo({ top: target, behavior: 'auto' });
+    });
+}
+
+function updateNodeItemDom(item, node, encoded, remarkText) {
+    item.setAttribute('data-raw', encoded);
+    const protocolEl = item.querySelector('.node-protocol');
+    if (protocolEl) protocolEl.textContent = getProtocol(node);
+    const contentBox = item.querySelector('.node-content-box');
+    if (contentBox) contentBox.textContent = node;
+    const remarkContainer = item.querySelector('.node-col-remark');
+    if (remarkContainer) restoreRemarkCell(remarkContainer, remarkText, encoded);
+    const editBtn = item.querySelector('.node-btn-secondary');
+    if (editBtn) editBtn.setAttribute('onclick', `startEditRemark(this, '${encoded}'); event.stopPropagation();`);
+    const copyBtn = item.querySelector('.node-col-actions .node-btn:not(.node-btn-secondary):not(.node-btn-danger)');
+    if (copyBtn) copyBtn.setAttribute('onclick', `copyNode(this, '${encoded}'); event.stopPropagation();`);
+    const deleteBtn = item.querySelector('.node-btn-danger');
+    if (deleteBtn) deleteBtn.setAttribute('onclick', `deleteNode('${encoded}'); event.stopPropagation();`);
+}
+
+function removeNodeFromDom(encoded) {
+    const item = getNodeItem(encoded);
+    if (!item) return false;
+    const listEl = item.closest('.node-list');
+    item.remove();
+    if (listEl) {
+        if (!listEl.querySelector('.node-item')) {
+            const dataContainer = document.getElementById('data');
+            if (dataContainer) {
+                dataContainer.innerHTML = '<div class="node-list"><div class="node-empty">暂无节点数据</div></div>';
+            }
+        } else {
+            updateNodeIndexInputs(listEl);
+        }
+    }
+    return true;
 }
 
 async function resetSubLink() {
@@ -477,10 +613,7 @@ function changeNodeIndex(input) {
     } else {
         list.insertBefore(item, list.children[target - 1]);
     }
-    const allInputs = list.querySelectorAll('.node-index-input');
-    allInputs.forEach((el, idx) => {
-        el.value = idx + 1;
-    });
+    updateNodeIndexInputs(list);
     saveNodeOrder();
 }
 
@@ -518,14 +651,11 @@ function filterByType(type) {
 
 function renderNodeList() {
     const dataContainer = document.getElementById('data');
-    const countEl = document.getElementById('nodeCount');
     if (!dataContainer) return;
+    rememberScrollPosition();
     const filterKey = currentFilterKey;
     const displayNodes = filterKey ? allNodes.filter(n => getProtocol(n) === filterKey) : allNodes.slice();
-    if (countEl) {
-        if (allNodes.length) countEl.textContent = '共 ' + allNodes.length + ' 个节点';
-        else countEl.textContent = '暂无节点';
-    }
+    updateNodeCount();
     renderTypeChips();
     let html = '<div class="node-list">';
     if (displayNodes.length) {
@@ -533,7 +663,7 @@ function renderNodeList() {
             const remark = getNodeRemark(node);
             const remarkText = remark || '';
             const formattedLink = node;
-            const encoded = encodeURIComponent(node).replace(/'/g, '%27');
+            const encoded = encodeNode(node);
             const remarkCell = remarkText ? `<span class="node-remark" onclick="startEditRemark(this, '${encoded}'); event.stopPropagation();">${remarkText}</span>` : `<span class="node-remark node-remark-empty" onclick="startEditRemark(this, '${encoded}'); event.stopPropagation();">未备注</span>`;
             return `
 <div class="node-item" data-raw="${encoded}">
@@ -561,26 +691,7 @@ function renderNodeList() {
         sortableInstance.destroy();
         sortableInstance = null;
     }
-    const listEl = document.querySelector('.node-list');
-    if (listEl && allNodes.length) {
-        sortableInstance = new Sortable(listEl, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            delay: 220,
-            delayOnTouchOnly: true,
-            touchStartThreshold: 8,
-            filter: '.node-index-input, .node-btn, .node-remark, .node-remark-edit, .node-content-box',
-            preventOnFilter: false,
-            draggable: '.node-item',
-            onEnd: function () {
-                const allInputs = listEl.querySelectorAll('.node-index-input');
-                allInputs.forEach((el, idx) => {
-                    el.value = idx + 1;
-                });
-                saveNodeOrder();
-            }
-        });
-    }
+    restoreScrollPosition();
 }
 
 
@@ -618,6 +729,8 @@ async function deleteNode(encoded) {
     const node = decodeURIComponent(encoded);
     if (!node) return;
     await fetchApiUrl();
+    const currentItem = getNodeItem(encoded);
+    lastScrollAnchor = captureScrollAnchor(currentItem);
     const endpoint = '/admin/delete-node';
     const body = { node: node };
     try {
@@ -635,7 +748,16 @@ async function deleteNode(encoded) {
             if (result.error) {
                 showAlert('提示: ' + result.error);
             } else {
-                setTimeout(fetchData, 300);
+                rememberScrollPosition();
+                const idx = allNodes.indexOf(node);
+                if (idx !== -1) allNodes.splice(idx, 1);
+                const removed = removeNodeFromDom(encoded);
+                updateNodeCount();
+                renderTypeChips();
+                if (!removed) {
+                    renderNodeList();
+                }
+                restoreScrollAnchor(lastScrollAnchor);
                 const remark = getNodeRemark(node);
                 const displayRemark = remark ? remark : '未备注';
                 showAlert('节点删除完成：' + displayRemark, false, null, false);
@@ -749,7 +871,13 @@ async function saveRemarkEdit(input, node, newRemark, originalText, encoded) {
         if (!response.ok) {
             throw new Error('update failed');
         }
-        renderNodeList();
+        const newEncoded = encodeNode(updatedNode);
+        const item = input.closest('.node-item') || getNodeItem(encoded);
+        if (item) {
+            updateNodeItemDom(item, updatedNode, newEncoded, newRemark);
+        } else {
+            renderNodeList();
+        }
     } catch (e) {
         allNodes[idx] = node;
         restoreRemarkCell(remarkContainer, originalText, encoded);
@@ -813,15 +941,7 @@ async function showSubscriptionInfo() {
         if (!cfIp) cfIp = 'time.is';
         if (!cfPort) cfPort = '443';
         const cfState = { ip: cfIp, port: cfPort };
-        const overlay = document.createElement('div');
-        overlay.className = 'alert-overlay';
-        attachOverlayTouchBlock(overlay);
-        const alertBox = document.createElement('div');
-        alertBox.className = 'alert-box';
-        const header = document.createElement('div');
-        header.textContent = '系统生成的订阅链接';
-        header.style.fontWeight = '600';
-        alertBox.appendChild(header);
+        const shell = openModal('系统生成的订阅链接');
         const createLine = (label, url, isCustom) => {
             const line = document.createElement('div');
             line.className = 'subscription-line';
@@ -922,22 +1042,17 @@ async function showSubscriptionInfo() {
                 return line;
             }
         };
-        alertBox.appendChild(createLine('默认订阅 (Base64)', `${currentDomain}/${subToken}`, false));
-        alertBox.appendChild(createLine('优选IP订阅', '', true));
-        alertBox.appendChild(createLine('Clash 配置链接', `${apiUrl}/clash?config=${currentDomain}/${subToken}`, false));
-        alertBox.appendChild(createLine('Sing-box 配置链接', `${apiUrl}/singbox?config=${currentDomain}/${subToken}`, false));
+        shell.body.appendChild(createLine('默认订阅 (Base64)', `${currentDomain}/${subToken}`, false));
+        shell.body.appendChild(createLine('优选IP订阅', '', true));
+        shell.body.appendChild(createLine('Clash 配置链接', `${apiUrl}/clash?config=${currentDomain}/${subToken}`, false));
+        shell.body.appendChild(createLine('Sing-box 配置链接', `${apiUrl}/singbox?config=${currentDomain}/${subToken}`, false));
         const closeButton = document.createElement('button');
         closeButton.className = 'alert-button';
         closeButton.textContent = '关闭';
         closeButton.onclick = async () => {
-            document.body.removeChild(overlay);
-            unlockBodyScroll();
+            closeModal();
         };
-        alertBox.appendChild(closeButton);
-
-        overlay.appendChild(alertBox);
-        document.body.appendChild(overlay);
-        lockBodyScroll();
+        shell.footer.appendChild(closeButton);
     } catch {
         showAlert('系统错误: 无法检索链接');
     }
@@ -1031,15 +1146,30 @@ function initMatrixEffect() {
     const canvas = document.createElement('canvas');
     container.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
-    const cols = Math.floor(width / 20);
-    const ypos = Array(cols).fill(0);
-    window.addEventListener('resize', () => {
+    let width = 0;
+    let height = 0;
+    let cols = 0;
+    let ypos = [];
+    const fps = 12;
+    const frameInterval = 1000 / fps;
+    let lastTime = 0;
+    let rafId = null;
+    let idleTimer = null;
+
+    const isVisible = () => {
+        const rect = container.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    };
+
+    const resizeCanvas = () => {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
-    });
-    function matrix() {
+        cols = Math.floor(width / 20);
+        ypos = Array(cols).fill(0);
+    };
+
+    const drawMatrix = () => {
+        if (!width || !height) return;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
         ctx.fillRect(0, 0, width, height);
         ctx.fillStyle = '#0f0';
@@ -1051,8 +1181,45 @@ function initMatrixEffect() {
             if (y > 100 + Math.random() * 10000) ypos[ind] = 0;
             else ypos[ind] = y + 20;
         });
-    }
-    setInterval(matrix, 50);
+    };
+
+    const scheduleIdle = () => {
+        if (idleTimer) return;
+        idleTimer = setTimeout(() => {
+            idleTimer = null;
+            rafId = requestAnimationFrame(loop);
+        }, 500);
+    };
+
+    const loop = (time) => {
+        if (document.hidden || !isVisible()) {
+            scheduleIdle();
+            return;
+        }
+        if (idleTimer) {
+            clearTimeout(idleTimer);
+            idleTimer = null;
+        }
+        if (!width || !height) resizeCanvas();
+        if (time - lastTime >= frameInterval) {
+            lastTime = time;
+            drawMatrix();
+        }
+        rafId = requestAnimationFrame(loop);
+    };
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    rafId = requestAnimationFrame(loop);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) return;
+        if (idleTimer) {
+            clearTimeout(idleTimer);
+            idleTimer = null;
+        }
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(loop);
+    });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
